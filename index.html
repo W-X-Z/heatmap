@@ -2,439 +2,436 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>주식 시장 트리맵 분석</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>해외주식 히트맵</title>
     <script src="https://code.highcharts.com/highcharts.js"></script>
     <script src="https://code.highcharts.com/modules/treemap.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body {
-            font-family: 'Arial', sans-serif;
+        * {
             margin: 0;
             padding: 0;
-            background-color: white;
-        }
-        .container {
-            width: 100%;
-            margin: 0;
-            padding: 0;
-            background-color: white;
             box-sizing: border-box;
-            height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #ffffff;
+            color: #000000;
+            line-height: 1.5;
+        }
+
+        /* 헤더 스타일 */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 44px;
+            background: #ffffff;
+            z-index: 100;
+            border-bottom: 1px solid #f0f0f0;
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            padding: 0 16px;
         }
-        .tabs {
-            margin: 0;
-            padding: 0 10px;
-            border-bottom: 2px solid #ddd;
-            flex-shrink: 0;
-            background: white;
-        }
-        .tab-btn {
-            padding: 10px 20px;
-            font-size: 16px;
+
+        .back-button {
+            width: 24px;
+            height: 24px;
+            background: transparent;
             border: none;
-            background: none;
-            cursor: pointer;
-            margin-right: 10px;
+            padding: 0;
+            margin-right: 8px;
+        }
+
+        .back-button::before {
+            content: "";
+            display: block;
+            width: 10px;
+            height: 10px;
+            border-left: 2px solid #000;
+            border-bottom: 2px solid #000;
+            transform: rotate(45deg);
+            margin-left: 8px;
+        }
+
+        .header-title {
+            flex: 1;
+            text-align: center;
+            font-size: 17px;
+            font-weight: 600;
+        }
+
+        /* 탭 스타일 */
+        .tab-container {
+            position: fixed;
+            top: 44px;
+            left: 0;
+            right: 0;
+            height: 44px;
+            background: #ffffff;
+            z-index: 99;
+            display: flex;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .tab {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #8e8e8e;
             position: relative;
         }
-        .tab-btn.active {
-            color: #2196F3;
-            font-weight: bold;
+
+        .tab.active {
+            color: #000000;
+            font-weight: 600;
         }
-        .tab-btn.active::after {
-            content: '';
+
+        .tab.active::after {
+            content: "";
             position: absolute;
-            bottom: -2px;
+            bottom: 0;
             left: 0;
-            width: 100%;
+            right: 0;
             height: 2px;
-            background-color: #2196F3;
+            background: #000000;
         }
-        .controls {
+
+        /* 메인 컨텐츠 영역 */
+        .content {
+            margin-top: 88px;
+            padding-bottom: 50px;
+            height: calc(100vh - 88px);
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* 트리맵 컨테이너 */
+        #stock-treemap {
+            width: 100%;
+            height: 100%;
+        }
+
+        #sector-treemap {
+            width: 100%;
+            min-height: 100%;
+            padding-bottom: 50px;
+        }
+
+        /* 슬라이더 컨트롤 */
+        .slider-container {
             position: fixed;
             bottom: 0;
             left: 0;
-            width: 100%;
-            background: white;
-            padding: 20px 0;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-            z-index: 1000;
-            margin: 0;
-        }
-        .slider-container {
-            width: 100%;
-            margin: 0 auto;
+            right: 0;
+            height: 50px;
+            background: #ffffff;
+            border-top: 1px solid #f0f0f0;
+            padding: 0 16px;
             display: flex;
             align-items: center;
-            gap: 20px;
-            padding: 0 25px;
         }
+
         .count-slider {
             flex: 1;
+            margin-right: 16px;
             -webkit-appearance: none;
-            height: 8px;
-            border-radius: 4px;
+            height: 2px;
             background: #e0e0e0;
             outline: none;
         }
+
         .count-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
-            appearance: none;
-            width: 32px;
-            height: 32px;
+            width: 20px;
+            height: 20px;
+            background: #ffffff;
+            border: 2px solid #000000;
             border-radius: 50%;
-            background: #2196F3;
             cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
-        .count-slider::-webkit-slider-thumb:hover {
-            transform: scale(1.1);
-            box-shadow: 0 3px 6px rgba(0,0,0,0.3);
-        }
+
         .count-label {
-            font-size: 16px;
-            color: #333;
-            min-width: 120px;
-            text-align: right;
-            font-weight: 500;
+            font-size: 12px;
+            color: #8e8e8e;
+            white-space: nowrap;
         }
-        .count-btn {
-            padding: 8px 16px;
-            margin-right: 10px;
-            border: 1px solid #ddd;
-            background-color: white;
-            border-radius: 20px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        .count-btn.active {
-            background-color: #2196F3;
-            color: white;
-            border-color: #2196F3;
-        }
-        .chart-container {
-            width: 100%;
-            flex: 1;
-            margin: 0;
-            overflow: hidden;
-        }
-        .filter-btn {
-            padding: 8px 16px;
-            background-color: #2196F3;
-            color: white;
-            border: none;
-            border-radius: 20px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .filter-btn i {
-            font-size: 14px;
-        }
-        .filter-modal {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.2);
-            z-index: 1000;
-            max-width: 600px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-        .modal-backdrop {
+
+        /* 팝업 및 바텀시트 스타일 */
+        .fullpage-popup {
             display: none;
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 999;
+            right: 0;
+            bottom: 0;
+            background: #ffffff;
+            z-index: 100;
         }
-        .sector-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 10px;
-            margin: 20px 0;
-        }
-        .sector-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .sector-item:hover {
-            background-color: #f5f5f5;
-        }
-        .sector-item.selected {
-            background-color: #e3f2fd;
-            border-color: #2196F3;
-        }
-        .sector-item input[type="checkbox"] {
-            margin: 0;
-        }
-        .modal-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            margin-top: 20px;
-            padding-top: 10px;
-            border-top: 1px solid #ddd;
-        }
-        .modal-footer button {
-            padding: 8px 16px;
-            border-radius: 5px;
-            cursor: pointer;
-            border: none;
-        }
-        .modal-footer .apply-btn {
-            background-color: #2196F3;
-            color: white;
-        }
-        .modal-footer .cancel-btn {
-            background-color: #ddd;
-        }
-        .selected-count {
-            margin-left: 10px;
-            color: #666;
-        }
-        .fullpage-popup {
-            width: 100% !important;
-            height: 100% !important;
-            margin: 0 !important;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            z-index: 1000;
+
+        .bottom-sheet-backdrop {
             display: none;
-            overflow: hidden;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease-out;
         }
-        
-        .fullpage-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px;
-            border-bottom: 1px solid #ddd;
-            background: white;
+
+        .bottom-sheet-backdrop.show {
+            opacity: 1;
         }
-        
-        .fullpage-title {
-            font-size: 20px;
-            font-weight: bold;
-        }
-        
-        .close-btn {
-            background: none;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            padding: 0 10px;
-        }
-        
-        .fullpage-content {
-            height: calc(100% - 70px);
-            padding: 20px;
-            overflow: auto;
-        }
-        
+
         .bottom-sheet {
             display: none;
             position: fixed;
-            bottom: 0;
             left: 0;
-            width: 100%;
-            background: white;
-            border-radius: 20px 20px 0 0;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-            z-index: 2001;
+            right: 0;
+            bottom: 0;
+            background: #ffffff;
+            border-radius: 12px 12px 0 0;
             transform: translateY(100%);
             transition: transform 0.3s ease-out;
+            z-index: 1001;
+            padding: 20px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
         }
-        
+
         .bottom-sheet.show {
             transform: translateY(0);
         }
-        
-        .bottom-sheet-header {
-            padding: 20px;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .bottom-sheet-title {
-            font-size: 18px;
-            font-weight: bold;
-        }
-        
-        .bottom-sheet-content {
-            padding: 20px;
-            max-height: 60vh;
-            overflow-y: auto;
-        }
-        
+
         .stock-info {
             display: grid;
             grid-template-columns: auto 1fr;
-            gap: 10px;
-            line-height: 1.6;
+            gap: 8px 16px;
+            margin-top: 16px;
         }
-        
+
         .stock-info dt {
-            font-weight: bold;
-            color: #666;
+            color: #8e8e8e;
+            font-size: 14px;
         }
-        
+
         .stock-info dd {
-            margin: 0;
-        }
-        
-        .handle {
-            width: 40px;
-            height: 4px;
-            background: #ddd;
-            border-radius: 2px;
-            margin: 10px auto;
+            font-size: 14px;
+            text-align: right;
         }
 
-        #detail-treemap {
-            width: 100% !important;
-            height: calc(100vh - 80px) !important;
-            margin-top: 10px !important;
+        /* 업종별 탭 스타일 */
+        .sector-overview {
+            padding: 16px;
+            background: #ffffff;
         }
 
-        #stock-treemap {
-            height: 100%;
-            padding-bottom: 80px;
+        .sector-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 8px;
+            aspect-ratio: 4/3;
+            background: #f8f8f8;
+            border-radius: 8px;
+            padding: 8px;
+        }
+
+        .sector-grid-item {
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 8px;
+        }
+
+        .sector-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .sector-name {
+            position: relative;
+            font-size: 12px;
+            font-weight: 600;
+            color: #ffffff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            z-index: 1;
+            flex: 1;
+            margin-right: 4px;
+        }
+
+        .sector-shortcut {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .sector-shortcut:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .sector-value {
+            position: relative;
+            font-size: 12px;
+            font-weight: 600;
+            color: #ffffff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            z-index: 1;
+            text-align: right;
+        }
+
+        .sector-grid-item .sector-weight {
+            position: relative;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.8);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            z-index: 1;
+            text-align: right;
+            margin-top: 2px;
+        }
+
+        .sector-details {
+            padding: 16px;
+            background: #ffffff;
+        }
+
+        .sector-detail-item {
+            margin-bottom: 16px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f8f8f8;
+            height: 300px;
+        }
+
+        .sector-detail-item:last-child {
+            margin-bottom: 0;
         }
 
         #sector-treemap {
-            height: 100%;
+            height: auto;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            padding: 5px 5px 80px 5px;
         }
 
-        .sector-chart {
-            background: white;
+        .sector-detail-container {
+            margin-bottom: 16px;
+            background: #ffffff;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
+            overflow: hidden;
         }
 
-        .sector-chart:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        .sector-detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
         }
 
-        @media screen and (max-width: 540px) {
-            .chart-container {
-                height: auto;
-            }
-            
-            #sector-treemap {
-                display: grid;
-                grid-template-columns: 1fr;
-                gap: 10px;
-            }
-            
-            .sector-chart {
-                height: 300px !important;
-                margin: 0;
-            }
-            
-            .slider-container {
-                padding: 0 20px;
-            }
-            
-            .count-slider::-webkit-slider-thumb {
-                width: 36px;
-                height: 36px;
-            }
-            
-            .count-label {
-                font-size: 15px;
-                min-width: 110px;
-            }
+        .sector-detail-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .sector-detail-shortcut {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            background: #f8f8f8;
+            color: #666;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .sector-detail-shortcut:hover {
+            background: #f0f0f0;
+        }
+
+        .sector-detail-shortcut svg {
+            stroke: currentColor;
+        }
+
+        .sector-detail-item {
+            height: 300px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="tabs">
-            <button class="tab-btn active" data-tab="stock">종목별</button>
-            <button class="tab-btn" data-tab="sector">업종별</button>
-        </div>
-        
-        <div id="stock-controls" class="controls">
-            <div class="slider-container">
-                <span class="count-label">표시 종목: 7개</span>
-                <input type="range" class="count-slider" min="7" max="50" value="7" step="1">
+    <!-- 헤더 -->
+    <header class="header">
+        <button class="back-button" onclick="history.back()"></button>
+        <h1 class="header-title">해외주식 히트맵</h1>
+    </header>
+
+    <!-- 탭 -->
+    <div class="tab-container">
+        <div class="tab active" data-tab="stock">종목별</div>
+        <div class="tab" data-tab="sector">업종별</div>
+    </div>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="content">
+        <div id="stock-treemap"></div>
+        <div id="sector-treemap" style="display: none;">
+            <!-- 상단 12개 업종 히트맵 -->
+            <div class="sector-overview">
+                <div class="sector-grid"></div>
             </div>
+            <!-- 하단 업종별 상세 히트맵 -->
+            <div class="sector-details"></div>
         </div>
+    </main>
 
-        <div id="sector-controls" class="controls" style="display: none;">
-            <button class="filter-btn">
-                <i class="fas fa-filter"></i>
-                업종 선택
-                <span class="selected-count">(12/12)</span>
-            </button>
-        </div>
-
-        <div id="stock-treemap" class="chart-container"></div>
-        <div id="sector-treemap" class="chart-container" style="display: none;"></div>
+    <!-- 슬라이더 컨트롤 -->
+    <div class="slider-container">
+        <input type="range" min="7" max="50" value="7" class="count-slider">
+        <span class="count-label">표시 종목: 7개</span>
     </div>
 
-    <div class="modal-backdrop"></div>
-    <div class="filter-modal">
-        <h3>업종 선택 <span class="selected-count">(12/12)</span></h3>
-        <div class="sector-list">
-            <!-- JavaScript로 동적 생성됨 -->
-        </div>
-        <div class="modal-footer">
-            <button class="cancel-btn">취소</button>
-            <button class="apply-btn">적용</button>
-        </div>
-    </div>
-
+    <!-- 업종 상세 팝업 -->
     <div class="fullpage-popup">
-        <div class="fullpage-header">
-            <div class="fullpage-title"></div>
-            <button class="close-btn">&times;</button>
-        </div>
-        <div class="fullpage-content">
-            <div id="detail-treemap" class="chart-container"></div>
+        <header class="header">
+            <button class="back-button close-btn"></button>
+            <h1 class="header-title fullpage-title"></h1>
+        </header>
+        <div id="detail-treemap"></div>
+        <!-- 상세 페이지 슬라이더 -->
+        <div class="slider-container" style="display: none;">
+            <input type="range" min="5" max="100" value="20" class="count-slider">
+            <span class="count-label">표시 종목: 20개</span>
         </div>
     </div>
+
+    <!-- 바텀시트 딤 처리 -->
+    <div class="bottom-sheet-backdrop"></div>
     
+    <!-- 종목 상세 바텀시트 -->
     <div class="bottom-sheet">
-        <div class="handle"></div>
-        <div class="bottom-sheet-header">
-            <div class="bottom-sheet-title"></div>
-            <button class="close-btn">&times;</button>
-        </div>
-        <div class="bottom-sheet-content">
-            <dl class="stock-info">
-                <!-- JavaScript로 동적 생성됨 -->
-            </dl>
-        </div>
+        <h2 class="bottom-sheet-title" style="font-size: 20px; margin-bottom: 16px;"></h2>
+        <dl class="stock-info"></dl>
     </div>
 
     <script src="script.js"></script>

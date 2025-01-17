@@ -1,7 +1,7 @@
 // CSV 데이터를 파싱하는 함수
 function parseCSV(csv) {
     const lines = csv.split('\n');
-    const headers = lines[0].split(',').map(header => header.trim());
+    const headers = lines[0].split(',').map(header => header.trim().replace(/^["']|["']$/g, ''));
     
     return lines.slice(1)
         .filter(line => line.trim())
@@ -9,7 +9,7 @@ function parseCSV(csv) {
             const values = line.split(',');
             const row = {};
             headers.forEach((header, index) => {
-                const value = values[index] ? values[index].trim() : '';
+                const value = values[index] ? values[index].trim().replace(/^["']|["']$/g, '') : '';
                 // 숫자 데이터 변환
                 if (['조회수치', '대비율', '현재가', '대비가', '조회비중'].includes(header)) {
                     row[header] = parseFloat(value) || 0;
@@ -99,13 +99,9 @@ async function loadCSVData() {
                 .map(sector => sector.code)
         );
 
-        // 초기 차트 표시
-        showTab('stock');
-        
-        // 업종 선택 모달 초기화
-        initializeSectorModal();
     } catch (error) {
         console.error('CSV 데이터 로드 중 오류 발생:', error);
+        throw error;
     }
 }
 
@@ -159,25 +155,13 @@ const companyLogos = {
 
 // 트리맵 데이터 생성 함수 수정
 function createTreemapData(count) {
-    return stockData.slice(0, count).map(stock => {
-        // 티커 추출 (USA 제거)
-        const ticker = stock.종목코드.replace('USA', '');
-        
-        const data = {
-            name: ticker, // 종목명 대신 티커 사용
-            fullName: stock.종목명, // 툴팁용 전체 종목명 저장
-            value: stock.조회수치,
-            colorValue: stock.대비율,
-            color: getColor(stock.대비율)
-        };
-
-        // 상위 10개 종목에 대해서만 로고 추가
-        if (count <= 10) {
-            data.logo = companyLogos[stock.종목명] || DEFAULT_LOGO;
-        }
-
-        return data;
-    });
+    return stockData.slice(0, count).map(stock => ({
+        name: stock.종목코드.replace('USA', ''),
+        value: stock.조회수치,
+        colorValue: stock.대비율,
+        color: getColor(stock.대비율),
+        stockData: stock
+    }));
 }
 
 // 트리맵 차트 생성 함수 수정
@@ -355,39 +339,14 @@ function updateSelectedCount() {
     });
 }
 
-// 업종별 트리맵 데이터 생성 함수 수정
+// 업종별 트리맵 데이터 생성 함수
 function createSectorTreemapData() {
-    // 업종별로 주식 데이터 그룹화
-    const sectorGroups = {};
-    stockData.forEach(stock => {
-        const sectorCode = stock.업종그룹;
-        const sector = sectorMap[sectorCode];
-        if (sector && selectedSectors.has(sectorCode)) {
-            if (!sectorGroups[sectorCode]) {
-                sectorGroups[sectorCode] = {
-                    id: sectorCode,
-                    name: sector.name || SECTOR_NAMES[sectorCode],
-                    value: sector.조회수치 || 0,
-                    colorValue: sector.대비율 || 0,
-                    color: getColor(sector.대비율 || 0),
-                    대비율: sector.대비율 || 0,
-                    전체종목수: sector.전체종목수 || 0,
-                    조회수치: sector.조회수치 || 0,
-                    조회비중: sector.조회비중 || 0,
-                    stocks: []  // 업종 내 종목들을 저장할 배열
-                };
-            }
-            sectorGroups[sectorCode].stocks.push(stock);
-        }
-    });
-
-    // 각 업종 내에서 종목들을 조회수치 기준으로 정렬하고 상위 7개만 유지
-    Object.values(sectorGroups).forEach(sector => {
-        sector.stocks.sort((a, b) => b.조회수치 - a.조회수치);
-        sector.stocks = sector.stocks.slice(0, 7);
-    });
-
-    return Object.values(sectorGroups);
+    return allSectors.map(sector => ({
+        ...sector,
+        value: sector.조회수치,
+        colorValue: sector.대비율,
+        color: getColor(sector.대비율)
+    }));
 }
 
 // 업종별 트리맵 생성 함수 수정
@@ -397,243 +356,240 @@ function createSectorTreemap(data) {
         return;
     }
 
-    const container = document.getElementById('sector-treemap');
-    container.innerHTML = '';
-    container.style.display = 'grid';
-    container.style.gridTemplateColumns = window.innerWidth <= 540 ? '1fr' : 'repeat(2, 1fr)';
-    container.style.gap = '10px';
-    container.style.height = 'auto';
-    container.style.overflowY = 'auto';
+    // 상단 12개 업종 그리드 생성
+    const sectorGrid = document.querySelector('.sector-grid');
+    const sectorDetails = document.querySelector('.sector-details');
+    
+    if (!sectorGrid || !sectorDetails) {
+        console.error('Required elements not found');
+        return;
+    }
+    
+    sectorGrid.innerHTML = '';
+    sectorDetails.innerHTML = '';
 
-    data.forEach((sector, index) => {
-        const sectorDiv = document.createElement('div');
-        sectorDiv.style.height = window.innerWidth <= 540 ? '600px' : '500px';
-        sectorDiv.className = 'sector-chart';
-        container.appendChild(sectorDiv);
-
-        // 업종 내 종목들의 트리맵 데이터 생성
-        const sectorData = [{
-            id: sector.id,
-            name: sector.name,
-            value: 10,  // 업종 영역의 크기를 최소화
-            color: sector.color
-        }];
-
-        // 상위 7개 종목 데이터 추가
-        sector.stocks.forEach(stock => {
-            sectorData.push({
+    // 모든 차트 설정을 미리 준비
+    const chartConfigs = data.map(sector => {
+        const sectorStocks = stockData
+            .filter(stock => stock.업종그룹 === sector.code)
+            .sort((a, b) => b.조회수치 - a.조회수치)
+            .slice(0, 20)
+            .map(stock => ({
                 name: stock.종목코드.replace('USA', ''),
                 value: stock.조회수치,
                 colorValue: stock.대비율,
-                color: getColor(stock.대비율)
-            });
-        });
+                color: getColor(stock.대비율),
+                stockData: stock
+            }));
 
-        Highcharts.chart(sectorDiv, {
-            chart: {
-                type: 'treemap',
-                height: window.innerWidth <= 540 ? 600 : 500,
-                spacing: [0, 0, 0, 0],
-                animation: false,
-                events: {
-                    click: function() {
-                        showSectorDetail(sector);
-                    }
-                }
-            },
-            plotOptions: {
-                series: {
-                    animation: false,
-                    layoutAlgorithm: {
-                        aspectRatio: 1.2,
-                        threshold: 0.1
-                    }
-                }
-            },
-            title: {
-                text: sector.name,
-                align: 'left',
-                style: {
-                    fontSize: '14px',
-                    fontWeight: 'bold'
+        return {
+            sector,
+            config: {
+                chart: {
+                    type: 'treemap',
+                    height: 300,
+                    animation: false
                 },
-                margin: 5,
-                x: 5
-            },
-            subtitle: {
-                text: undefined
-            },
-            series: [{
-                type: 'treemap',
-                layoutAlgorithm: 'squarified',
-                data: sectorData,
-                dataLabels: {
-                    enabled: true,
-                    align: 'center',
-                    verticalAlign: 'middle',
-                    style: {
-                        textOutline: 'none',
-                        fontWeight: 'bold',
-                        color: '#ffffff',
-                        textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
-                        width: '100%',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
+                title: { text: null },
+                series: [{
+                    layoutAlgorithm: 'squarified',
+                    animation: false,
+                    data: sectorStocks,
+                    dataLabels: {
+                        enabled: true,
+                        formatter: function() {
+                            return this.point.name;
+                        }
                     },
-                    useHTML: true,
-                    formatter: function() {
-                        const isMainSector = this.point.id === sector.id;
-                        if (isMainSector) {
-                            return '';
+                    events: {
+                        click: function(e) {
+                            if (e.point.stockData) {
+                                showStockDetail(e.point);
+                            }
                         }
-
-                        // 영역의 너비와 높이 계산
-                        const width = this.point.shapeArgs.width;
-                        const height = this.point.shapeArgs.height;
-                        
-                        // 최소 표시 크기 설정 (픽셀)
-                        const MIN_DISPLAY_SIZE = 45;
-                        
-                        // 영역이 너무 작으면 레이블 숨김
-                        if (width < MIN_DISPLAY_SIZE || height < MIN_DISPLAY_SIZE) {
-                            return '';
-                        }
-
-                        // 영역 크기에 따른 글자 크기 계산
-                        const area = width * height;
-                        const MIN_FONT_SIZE = 12;
-                        const MAX_FONT_SIZE = 24;
-                        const BASE_AREA = 10000;
-                        
-                        // 영역 크기에 비례하여 글자 크기 계산 (로그 스케일 적용)
-                        const fontSize = Math.min(
-                            MAX_FONT_SIZE,
-                            Math.max(
-                                MIN_FONT_SIZE,
-                                Math.floor(MIN_FONT_SIZE + (Math.log(area / BASE_AREA + 1) * 3.5))
-                            )
-                        );
-                        
-                        // 줄 간격 조정을 위한 line-height 추가
-                        return `<div style="font-size: ${fontSize}px; line-height: 1.2;">
-                            ${this.point.name}<br>
-                            ${this.point.colorValue.toFixed(2)}%
-                        </div>`;
                     }
-                }
-            }],
-            tooltip: { enabled: false },
-            credits: { enabled: false }
+                }],
+                credits: { enabled: false }
+            }
+        };
+    });
+
+    // DOM 요소 생성 및 차트 렌더링
+    chartConfigs.forEach(({ sector, config }) => {
+        // 그리드 아이템 생성
+        const gridItem = document.createElement('div');
+        gridItem.className = 'sector-grid-item';
+        gridItem.style.backgroundColor = getColor(sector.대비율);
+        gridItem.innerHTML = `
+            <div class="sector-name">${sector.name}</div>
+            <div class="sector-value">${sector.대비율.toFixed(2)}%</div>
+        `;
+        
+        gridItem.addEventListener('click', () => {
+            const detailItem = document.getElementById(`sector-${sector.code}`);
+            if (detailItem) {
+                detailItem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         });
+        
+        sectorGrid.appendChild(gridItem);
+
+        // 상세 영역 생성
+        const detailContainer = document.createElement('div');
+        detailContainer.className = 'sector-detail-container';
+        detailContainer.id = `sector-${sector.code}`;
+
+        const detailHeader = document.createElement('div');
+        detailHeader.className = 'sector-detail-header';
+        detailHeader.innerHTML = `
+            <h3 class="sector-detail-title">${sector.name}</h3>
+            <button class="sector-detail-shortcut">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M7 17L17 7M17 7H8M17 7V16"/>
+                </svg>
+                상세보기
+            </button>
+        `;
+
+        const detailItem = document.createElement('div');
+        detailItem.className = 'sector-detail-item';
+
+        detailContainer.appendChild(detailHeader);
+        detailContainer.appendChild(detailItem);
+        sectorDetails.appendChild(detailContainer);
+
+        detailHeader.querySelector('.sector-detail-shortcut').addEventListener('click', () => {
+            showSectorDetail(sector);
+        });
+
+        // 차트 렌더링
+        if (config.series[0].data.length > 0) {
+            Highcharts.chart(detailItem, config);
+        }
     });
 }
 
-// 업종 상세 보기 표시
+// 업종 상세 보기 표시 함수 수정
 function showSectorDetail(sector) {
     const popup = document.querySelector('.fullpage-popup');
     const title = popup.querySelector('.fullpage-title');
     title.textContent = sector.name;
     
     const width = window.innerWidth;
-    const height = window.innerHeight - 60; // 헤더 영역만 고려
+    const height = window.innerHeight - 94; // 헤더와 슬라이더 높이만큼 제외
 
-    // 해당 업종의 종목들만 필터링
-    const sectorStocks = stockData.filter(stock => stock.업종그룹 === sector.id);
+    // 해당 업종의 모든 종목을 조회수치로 정렬
+    const allStocks = stockData
+        .filter(stock => stock.업종그룹 === sector.code)
+        .sort((a, b) => b.조회수치 - a.조회수치);
+
+    if (allStocks.length === 0) {
+        console.error('해당 업종의 종목이 없습니다:', sector.code);
+        return;
+    }
+
+    // 슬라이더 설정
+    const sliderContainer = popup.querySelector('.slider-container');
+    const slider = sliderContainer.querySelector('.count-slider');
+    const label = sliderContainer.querySelector('.count-label');
     
-    // 상세 트리맵 생성
-    Highcharts.chart('detail-treemap', {
-        chart: {
-            width: width,
-            height: height,
-            animation: false,
-            spacing: [0, 0, 0, 0]
-        },
-        plotOptions: {
-            series: {
-                animation: false,
-                layoutAlgorithm: {
-                    aspectRatio: 1.2,
-                    threshold: 0.1
-                }
-            }
-        },
-        series: [{
-            type: 'treemap',
-            layoutAlgorithm: 'squarified',
-            data: sectorStocks.map(stock => ({
+    // 슬라이더 범위 설정
+    const minCount = Math.min(5, allStocks.length);
+    const maxCount = allStocks.length;
+    slider.min = minCount;
+    slider.max = maxCount;
+    slider.value = Math.min(20, maxCount); // 초기값은 20개 또는 최대 종목 수
+    
+    // 슬라이더 레이블 업데이트
+    function updateLabel() {
+        label.textContent = `표시 종목: ${slider.value}개`;
+    }
+    updateLabel();
+
+    // 트리맵 생성 함수
+    function createDetailTreemap(count) {
+        const sectorStocks = allStocks
+            .slice(0, count)
+            .map(stock => ({
                 name: stock.종목코드.replace('USA', ''),
                 value: stock.조회수치,
                 colorValue: stock.대비율,
                 color: getColor(stock.대비율),
                 stockData: stock
-            })),
-            dataLabels: {
-                enabled: true,
-                align: 'center',
-                verticalAlign: 'middle',
-                style: {
-                    textOutline: 'none',
-                    fontWeight: 'bold',
-                    color: '#ffffff',
-                    textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
-                    width: '100%',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                },
-                useHTML: true,
-                formatter: function() {
-                    // 영역의 너비와 높이 계산
-                    const width = this.point.shapeArgs.width;
-                    const height = this.point.shapeArgs.height;
-                    
-                    // 최소 표시 크기 설정 (픽셀)
-                    const MIN_DISPLAY_SIZE = 45;
-                    
-                    // 영역이 너무 작으면 레이블 숨김
-                    if (width < MIN_DISPLAY_SIZE || height < MIN_DISPLAY_SIZE) {
-                        return '';
+            }));
+        
+        Highcharts.chart('detail-treemap', {
+            series: [{
+                type: 'treemap',
+                data: sectorStocks,
+                animation: false,
+                events: {
+                    click: function(e) {
+                        if (e.point.stockData) {
+                            showStockDetail(e.point);
+                        }
                     }
+                },
+                dataLabels: {
+                    enabled: true,
+                    formatter: function() {
+                        if (!this.point || !this.point.shapeArgs) return '';
+                        
+                        const width = this.point.shapeArgs.width;
+                        const height = this.point.shapeArgs.height;
+                        
+                        const MIN_DISPLAY_SIZE = 45;
+                        if (width < MIN_DISPLAY_SIZE || height < MIN_DISPLAY_SIZE) {
+                            return '';
+                        }
 
-                    // 영역 크기에 따른 글자 크기 계산
-                    const area = width * height;
-                    const MIN_FONT_SIZE = 12;
-                    const MAX_FONT_SIZE = 24;
-                    const BASE_AREA = 10000;
-                    
-                    // 영역 크기에 비례하여 글자 크기 계산 (로그 스케일 적용)
-                    const fontSize = Math.min(
-                        MAX_FONT_SIZE,
-                        Math.max(
-                            MIN_FONT_SIZE,
-                            Math.floor(MIN_FONT_SIZE + (Math.log(area / BASE_AREA + 1) * 3.5))
-                        )
-                    );
-                    
-                    // 줄 간격 조정을 위한 line-height 추가
-                    return `<div style="font-size: ${fontSize}px; line-height: 1.2;">
-                        ${this.point.name}<br>
-                        ${this.point.colorValue.toFixed(2)}%
-                    </div>`;
+                        return `${this.point.name}<br>${this.point.colorValue.toFixed(2)}%`;
+                    }
                 }
-            }
-        }],
-        title: {
-            text: sector.name,
-            align: 'left',
-            style: {
-                fontSize: '16px',
-                fontWeight: 'bold'
-            }
-        },
-        credits: { enabled: false }
+            }],
+            title: {
+                text: sector.name,
+                align: 'left',
+                style: {
+                    fontSize: '16px',
+                    fontWeight: 'bold'
+                }
+            },
+            chart: {
+                width: width,
+                height: height,
+                animation: false,
+                spacing: [0, 0, 0, 0]
+            },
+            plotOptions: {
+                series: {
+                    animation: false,
+                    layoutAlgorithm: 'squarified'
+                }
+            },
+            tooltip: { enabled: false },
+            credits: { enabled: false }
+        });
+    }
+
+    // 슬라이더 이벤트 리스너
+    slider.addEventListener('input', function() {
+        updateLabel();
+        createDetailTreemap(parseInt(this.value));
     });
+
+    // 초기 트리맵 생성
+    createDetailTreemap(parseInt(slider.value));
     
+    // 팝업 표시
     popup.style.display = 'block';
+    sliderContainer.style.display = 'flex';
 }
 
 // 종목 상세 정보 표시
 function showStockDetail(stock) {
     const bottomSheet = document.querySelector('.bottom-sheet');
+    const backdrop = document.querySelector('.bottom-sheet-backdrop');
     const title = bottomSheet.querySelector('.bottom-sheet-title');
     const content = bottomSheet.querySelector('.stock-info');
     
@@ -662,31 +618,87 @@ function showStockDetail(stock) {
         <dd>${stockInfo.조회비중.toFixed(2)}%</dd>
     `;
     
-    // 바텀시트 표시
+    // 바텀시트와 딤 표시
+    backdrop.style.display = 'block';
     bottomSheet.style.display = 'block';
-    setTimeout(() => bottomSheet.classList.add('show'), 10);
+    
+    // 애니메이션을 위해 약간의 지연 후 클래스 추가
+    setTimeout(() => {
+        backdrop.classList.add('show');
+        bottomSheet.classList.add('show');
+    }, 10);
+}
+
+// 바텀시트 닫기 함수
+function closeBottomSheet() {
+    const bottomSheet = document.querySelector('.bottom-sheet');
+    const backdrop = document.querySelector('.bottom-sheet-backdrop');
+    
+    bottomSheet.classList.remove('show');
+    backdrop.classList.remove('show');
+    
+    // 애니메이션 완료 후 display none 처리
+    setTimeout(() => {
+        bottomSheet.style.display = 'none';
+        backdrop.style.display = 'none';
+        bottomSheet.style.transform = '';
+    }, 300);
 }
 
 // 탭 전환 함수
 function showTab(tabId) {
-    // 모든 차트 컨테이너 숨기기
-    document.getElementById('stock-treemap').style.display = 'none';
-    document.getElementById('sector-treemap').style.display = 'none';
+    // 탭 스타일 업데이트
+    document.querySelectorAll('.tab').forEach(tab => {
+        if (tab.dataset.tab === tabId) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
+
+    // 슬라이더 컨트롤 표시/숨김
+    const sliderContainer = document.querySelector('.slider-container');
+    if (sliderContainer) {
+        sliderContainer.style.display = tabId === 'stock' ? 'flex' : 'none';
+    }
     
-    // 컨트롤 표시/숨김 처리
-    document.getElementById('stock-controls').style.display = 
-        tabId === 'stock' ? 'block' : 'none';
-    document.getElementById('sector-controls').style.display = 
-        tabId === 'sector' ? 'block' : 'none';
+    // 차트 표시/숨김
+    const stockTreemap = document.getElementById('stock-treemap');
+    const sectorTreemap = document.getElementById('sector-treemap');
     
-    // 선택된 탭의 차트 표시
-    if (tabId === 'stock') {
-        document.getElementById('stock-treemap').style.display = 'block';
-        const slider = document.querySelector('.count-slider');
-        createTreemap(createTreemapData(parseInt(slider.value)));
-    } else {
-        document.getElementById('sector-treemap').style.display = 'block';
-        createSectorTreemap(createSectorTreemapData());
+    if (stockTreemap && sectorTreemap) {
+        if (tabId === 'stock') {
+            stockTreemap.style.display = 'block';
+            sectorTreemap.style.display = 'none';
+            const slider = document.querySelector('.count-slider');
+            if (slider) {
+                createTreemap(createTreemapData(parseInt(slider.value)));
+            }
+        } else {
+            stockTreemap.style.display = 'none';
+            sectorTreemap.style.display = 'block';
+            
+            // 업종별 데이터 생성
+            const sectors = Object.entries(SECTOR_NAMES).map(([code, name]) => {
+                const stocks = stockData.filter(stock => stock.업종그룹 === code);
+                const totalViews = stocks.reduce((sum, stock) => sum + stock.조회수치, 0);
+                const avgChange = stocks.reduce((sum, stock) => sum + stock.대비율, 0) / (stocks.length || 1);
+                
+                return {
+                    code,
+                    name,
+                    조회수치: totalViews,
+                    대비율: avgChange
+                };
+            });
+
+            // 조회수치 기준으로 정렬하고 상위 12개 선택
+            const sectorData = sectors
+                .sort((a, b) => b.조회수치 - a.조회수치)
+                .slice(0, 12);
+
+            createSectorTreemap(sectorData);
+        }
     }
 }
 
@@ -714,32 +726,29 @@ window.addEventListener('resize', handleResize);
 // 초기화
 document.addEventListener('DOMContentLoaded', function() {
     // CSV 데이터 로드
-    loadCSVData();
-
-    // 탭 이벤트 리스너
-    document.querySelectorAll('.tab-btn').forEach(button => {
-        button.addEventListener('click', (e) => {
-            // 활성 탭 스타일 변경
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            e.target.classList.add('active');
-            
-            // 탭 전환
-            showTab(e.target.dataset.tab);
+    loadCSVData().then(() => {
+        // 탭 이벤트 리스너
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                showTab(tab.dataset.tab);
+            });
         });
-    });
 
-    // 슬라이더 이벤트 리스너
-    const slider = document.querySelector('.count-slider');
-    const label = document.querySelector('.count-label');
-    
-    slider.addEventListener('input', function(e) {
-        const count = parseInt(e.target.value);
-        label.textContent = `표시 종목: ${count}개`;
-        createTreemap(createTreemapData(count));
-    });
+        // 슬라이더 이벤트 리스너
+        const slider = document.querySelector('.count-slider');
+        const label = document.querySelector('.count-label');
+        
+        if (slider && label) {
+            slider.addEventListener('input', function(e) {
+                const count = parseInt(e.target.value);
+                label.textContent = `표시 종목: ${count}개`;
+                createTreemap(createTreemapData(count));
+            });
+        }
 
-    // 초기 트리맵 표시 (7개로 시작)
-    showTab('stock');
+        // 초기 트리맵 표시
+        showTab('stock');
+    });
 
     // 팝업 닫기 버튼 이벤트
     document.querySelectorAll('.close-btn').forEach(btn => {
@@ -757,38 +766,42 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // 바텀시트 딤 클릭 이벤트
+    const backdrop = document.querySelector('.bottom-sheet-backdrop');
+    if (backdrop) {
+        backdrop.addEventListener('click', closeBottomSheet);
+    }
+
     // 바텀시트 드래그로 닫기
     const bottomSheet = document.querySelector('.bottom-sheet');
     let startY;
     let startTransform;
     
-    bottomSheet.addEventListener('touchstart', function(e) {
-        startY = e.touches[0].clientY;
-        startTransform = parseInt(getComputedStyle(this).transform.split(',')[5]) || 0;
-    });
-    
-    bottomSheet.addEventListener('touchmove', function(e) {
-        if (!startY) return;
+    if (bottomSheet) {
+        bottomSheet.addEventListener('touchstart', function(e) {
+            startY = e.touches[0].clientY;
+            startTransform = parseInt(getComputedStyle(this).transform.split(',')[5]) || 0;
+        });
         
-        const deltaY = e.touches[0].clientY - startY;
-        if (deltaY > 0) {
-            this.style.transform = `translateY(${deltaY}px)`;
-        }
-    });
-    
-    bottomSheet.addEventListener('touchend', function(e) {
-        if (!startY) return;
+        bottomSheet.addEventListener('touchmove', function(e) {
+            if (!startY) return;
+            
+            const deltaY = e.touches[0].clientY - startY;
+            if (deltaY > 0) {
+                this.style.transform = `translateY(${deltaY}px)`;
+            }
+        });
         
-        const deltaY = e.changedTouches[0].clientY - startY;
-        if (deltaY > 100) {
-            this.classList.remove('show');
-            setTimeout(() => {
-                this.style.display = 'none';
+        bottomSheet.addEventListener('touchend', function(e) {
+            if (!startY) return;
+            
+            const deltaY = e.changedTouches[0].clientY - startY;
+            if (deltaY > 100) {
+                closeBottomSheet();
+            } else {
                 this.style.transform = '';
-            }, 300);
-        } else {
-            this.style.transform = '';
-        }
-        startY = null;
-    });
+            }
+            startY = null;
+        });
+    }
 }); 
