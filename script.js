@@ -237,15 +237,7 @@ function createTreemap(data) {
                     </div>`;
                 }
             },
-            tooltip: {
-                useHTML: true,
-                headerFormat: '',
-                pointFormat: `<div style="font-size: 12px;">
-                    <b>{point.fullName}</b><br/>
-                    조회수: {point.value:,.0f}<br/>
-                    대비율: {point.colorValue:.2f}%
-                </div>`
-            }
+            tooltip: { enabled: false }
         }],
         title: {
             text: undefined
@@ -368,6 +360,21 @@ function createSectorTreemap(data) {
     sectorGrid.innerHTML = '';
     sectorDetails.innerHTML = '';
 
+    // 맨 위로 버튼 추가
+    const scrollTopBtn = document.createElement('button');
+    scrollTopBtn.className = 'scroll-top-btn';
+    scrollTopBtn.innerHTML = `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 19V5M5 12l7-7 7 7"/>
+        </svg>
+        맨 위로
+    `;
+    scrollTopBtn.addEventListener('click', () => {
+        const content = document.querySelector('.content');
+        content.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    sectorDetails.appendChild(scrollTopBtn);
+
     // 모든 차트 설정을 미리 준비
     const chartConfigs = data.map(sector => {
         const sectorStocks = stockData
@@ -409,6 +416,7 @@ function createSectorTreemap(data) {
                         }
                     }
                 }],
+                tooltip: { enabled: false },
                 credits: { enabled: false }
             }
         };
@@ -538,12 +546,26 @@ function showSectorDetail(sector) {
                         const width = this.point.shapeArgs.width;
                         const height = this.point.shapeArgs.height;
                         
-                        const MIN_DISPLAY_SIZE = 45;
+                        const MIN_DISPLAY_SIZE = 30;
                         if (width < MIN_DISPLAY_SIZE || height < MIN_DISPLAY_SIZE) {
                             return '';
                         }
 
-                        return `${this.point.name}<br>${this.point.colorValue.toFixed(2)}%`;
+                        // 영역 크기에 따른 글자 크기 계산
+                        const area = width * height;
+                        const MIN_FONT_SIZE = 8;
+                        const MAX_FONT_SIZE = 24;
+                        const fontSize = Math.min(
+                            MAX_FONT_SIZE,
+                            Math.max(
+                                MIN_FONT_SIZE,
+                                Math.floor(Math.sqrt(area) / 8)
+                            )
+                        );
+
+                        return `<div style="font-size: ${fontSize}px;">
+                            ${this.point.name}<br>${this.point.colorValue.toFixed(2)}%
+                        </div>`;
                     }
                 }
             }],
