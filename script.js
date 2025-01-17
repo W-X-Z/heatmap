@@ -211,25 +211,46 @@ function createTreemap(data) {
                 verticalAlign: 'middle',
                 style: {
                     textOutline: 'none',
-                    fontSize: '14px',
                     fontWeight: 'bold',
                     color: '#ffffff',
-                    textShadow: '1px 1px 2px rgba(0,0,0,0.8)'
+                    textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+                    width: '100%',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
                 },
+                useHTML: true,
                 formatter: function() {
                     // 영역의 너비와 높이 계산
                     const width = this.point.shapeArgs.width;
                     const height = this.point.shapeArgs.height;
                     
                     // 최소 표시 크기 설정 (픽셀)
-                    const MIN_SIZE = 60;
+                    const MIN_DISPLAY_SIZE = 50;
                     
                     // 영역이 너무 작으면 레이블 숨김
-                    if (width < MIN_SIZE || height < MIN_SIZE) {
+                    if (width < MIN_DISPLAY_SIZE || height < MIN_DISPLAY_SIZE) {
                         return '';
                     }
+
+                    // 영역 크기에 따른 글자 크기 계산
+                    const area = width * height;
+                    const MIN_FONT_SIZE = 12;
+                    const MAX_FONT_SIZE = 24;
+                    const BASE_AREA = 10000;
                     
-                    return `<div>${this.point.name}<br>${this.point.colorValue.toFixed(2)}%</div>`;
+                    // 영역 크기에 비례하여 글자 크기 계산 (로그 스케일 적용)
+                    const fontSize = Math.min(
+                        MAX_FONT_SIZE,
+                        Math.max(
+                            MIN_FONT_SIZE,
+                            Math.floor(MIN_FONT_SIZE + (Math.log(area / BASE_AREA + 1) * 4))
+                        )
+                    );
+                    
+                    return `<div style="font-size: ${fontSize}px; line-height: 1.2;">
+                        ${this.point.name}<br>
+                        ${this.point.colorValue.toFixed(2)}%
+                    </div>`;
                 }
             },
             tooltip: {
@@ -360,10 +381,10 @@ function createSectorTreemapData() {
         }
     });
 
-    // 각 업종 내에서 종목들을 조회수치 기준으로 정렬하고 상위 5개만 유지
+    // 각 업종 내에서 종목들을 조회수치 기준으로 정렬하고 상위 7개만 유지
     Object.values(sectorGroups).forEach(sector => {
         sector.stocks.sort((a, b) => b.조회수치 - a.조회수치);
-        sector.stocks = sector.stocks.slice(0, 5);
+        sector.stocks = sector.stocks.slice(0, 7);
     });
 
     return Object.values(sectorGroups);
@@ -386,7 +407,7 @@ function createSectorTreemap(data) {
 
     data.forEach((sector, index) => {
         const sectorDiv = document.createElement('div');
-        sectorDiv.style.height = window.innerWidth <= 540 ? '300px' : '250px';
+        sectorDiv.style.height = window.innerWidth <= 540 ? '600px' : '500px';
         sectorDiv.className = 'sector-chart';
         container.appendChild(sectorDiv);
 
@@ -398,7 +419,7 @@ function createSectorTreemap(data) {
             color: sector.color
         }];
 
-        // 상위 5개 종목 데이터 추가
+        // 상위 7개 종목 데이터 추가
         sector.stocks.forEach(stock => {
             sectorData.push({
                 name: stock.종목코드.replace('USA', ''),
@@ -411,9 +432,14 @@ function createSectorTreemap(data) {
         Highcharts.chart(sectorDiv, {
             chart: {
                 type: 'treemap',
-                height: window.innerWidth <= 540 ? 300 : 250,
+                height: window.innerWidth <= 540 ? 600 : 500,
                 spacing: [0, 0, 0, 0],
-                animation: false
+                animation: false,
+                events: {
+                    click: function() {
+                        showSectorDetail(sector);
+                    }
+                }
             },
             plotOptions: {
                 series: {
@@ -435,12 +461,7 @@ function createSectorTreemap(data) {
                 x: 5
             },
             subtitle: {
-                text: `대비율: ${sector.대비율.toFixed(2)}% / 종목수: ${sector.전체종목수}개`,
-                align: 'left',
-                style: {
-                    fontSize: '12px'
-                },
-                x: 5
+                text: undefined
             },
             series: [{
                 type: 'treemap',
@@ -452,11 +473,14 @@ function createSectorTreemap(data) {
                     verticalAlign: 'middle',
                     style: {
                         textOutline: 'none',
-                        fontSize: '12px',
                         fontWeight: 'bold',
                         color: '#ffffff',
-                        textShadow: '1px 1px 2px rgba(0,0,0,0.8)'
+                        textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+                        width: '100%',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                     },
+                    useHTML: true,
                     formatter: function() {
                         const isMainSector = this.point.id === sector.id;
                         if (isMainSector) {
@@ -468,14 +492,33 @@ function createSectorTreemap(data) {
                         const height = this.point.shapeArgs.height;
                         
                         // 최소 표시 크기 설정 (픽셀)
-                        const MIN_SIZE = 50;
+                        const MIN_DISPLAY_SIZE = 45;
                         
                         // 영역이 너무 작으면 레이블 숨김
-                        if (width < MIN_SIZE || height < MIN_SIZE) {
+                        if (width < MIN_DISPLAY_SIZE || height < MIN_DISPLAY_SIZE) {
                             return '';
                         }
 
-                        return `<div>${this.point.name}<br>${this.point.colorValue.toFixed(2)}%</div>`;
+                        // 영역 크기에 따른 글자 크기 계산
+                        const area = width * height;
+                        const MIN_FONT_SIZE = 12;
+                        const MAX_FONT_SIZE = 24;
+                        const BASE_AREA = 10000;
+                        
+                        // 영역 크기에 비례하여 글자 크기 계산 (로그 스케일 적용)
+                        const fontSize = Math.min(
+                            MAX_FONT_SIZE,
+                            Math.max(
+                                MIN_FONT_SIZE,
+                                Math.floor(MIN_FONT_SIZE + (Math.log(area / BASE_AREA + 1) * 3.5))
+                            )
+                        );
+                        
+                        // 줄 간격 조정을 위한 line-height 추가
+                        return `<div style="font-size: ${fontSize}px; line-height: 1.2;">
+                            ${this.point.name}<br>
+                            ${this.point.colorValue.toFixed(2)}%
+                        </div>`;
                     }
                 }
             }],
@@ -526,26 +569,63 @@ function showSectorDetail(sector) {
             })),
             dataLabels: {
                 enabled: true,
+                align: 'center',
+                verticalAlign: 'middle',
                 style: {
-                    fontSize: '14px',
-                    fontWeight: 'bold',
                     textOutline: 'none',
+                    fontWeight: 'bold',
                     color: '#ffffff',
-                    textShadow: '0 0 3px #000000'
-                }
-            },
-            events: {
-                click: function(e) {
-                    showStockDetail(e.point);
+                    textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+                    width: '100%',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                },
+                useHTML: true,
+                formatter: function() {
+                    // 영역의 너비와 높이 계산
+                    const width = this.point.shapeArgs.width;
+                    const height = this.point.shapeArgs.height;
+                    
+                    // 최소 표시 크기 설정 (픽셀)
+                    const MIN_DISPLAY_SIZE = 45;
+                    
+                    // 영역이 너무 작으면 레이블 숨김
+                    if (width < MIN_DISPLAY_SIZE || height < MIN_DISPLAY_SIZE) {
+                        return '';
+                    }
+
+                    // 영역 크기에 따른 글자 크기 계산
+                    const area = width * height;
+                    const MIN_FONT_SIZE = 12;
+                    const MAX_FONT_SIZE = 24;
+                    const BASE_AREA = 10000;
+                    
+                    // 영역 크기에 비례하여 글자 크기 계산 (로그 스케일 적용)
+                    const fontSize = Math.min(
+                        MAX_FONT_SIZE,
+                        Math.max(
+                            MIN_FONT_SIZE,
+                            Math.floor(MIN_FONT_SIZE + (Math.log(area / BASE_AREA + 1) * 3.5))
+                        )
+                    );
+                    
+                    // 줄 간격 조정을 위한 line-height 추가
+                    return `<div style="font-size: ${fontSize}px; line-height: 1.2;">
+                        ${this.point.name}<br>
+                        ${this.point.colorValue.toFixed(2)}%
+                    </div>`;
                 }
             }
         }],
         title: {
-            text: `${sector.name} 상세 분석`
+            text: sector.name,
+            align: 'left',
+            style: {
+                fontSize: '16px',
+                fontWeight: 'bold'
+            }
         },
-        subtitle: {
-            text: `전체 종목수: ${sector.전체종목수}개 / 업종 대비율: ${sector.대비율.toFixed(2)}%`
-        }
+        credits: { enabled: false }
     });
     
     popup.style.display = 'block';
